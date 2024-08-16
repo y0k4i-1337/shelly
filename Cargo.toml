@@ -1,0 +1,10 @@
+[package]
+name = "shelly"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+base64 = "0.22.1"
+base85 = "2.0.0"
+clap = { version = "4.5.16", features = ["derive", "wrap_help"] }
+hex = "0.4.3"
