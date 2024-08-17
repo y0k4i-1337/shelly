@@ -7,4 +7,5 @@ edition = "2021"
 base64 = "0.22.1"
 base85 = "2.0.0"
 clap = { version = "4.5.16", features = ["derive", "wrap_help"] }
+clap-num = "1.1.1"
 hex = "0.4.3"

