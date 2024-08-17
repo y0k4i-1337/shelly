@@ -179,7 +179,7 @@ fn print_python_code(data: &[u8], output_var: &str) {
 
 /// Print C code
 fn print_c_code(data: &[u8], output_var: &str) {
-    print!("unsigned char {}[{}] = {{", output_var, data.len());
+    print!("unsigned char {}[] = {{", output_var);
     for (i, chunk) in data.chunks(12).enumerate() {
         if i > 0 {
             print!(",");
@@ -348,6 +348,7 @@ fn print_decryption_commands(format: Format, output_var: &str, rot_key: i8, xor_
             println!("}}\n");
             println!("\n// main function in C:");
             println!("int main(int argc, char **argv) {{");
+            println!("    unsigned char {}[] = {{ /* payload bytes here */ }};", output_var);
             println!("    for (size_t i = 0; i < sizeof({}); i++) {{", output_var);
             println!("        {}[i] ^= 0x{:02x}; // XOR decrypt", output_var, xor_key);
             println!("    }}");
